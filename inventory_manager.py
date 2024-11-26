@@ -6,8 +6,8 @@ import bcrypt
 
 # Function to get the database path
 def get_db_path():
-    db_dir = "C:/Projects/data"  # Change this to your preferred location
-    os.makedirs(db_dir, exist_ok=True)  # Ensure the directory exists
+    db_dir = "C:/Projects/data"
+    os.makedirs(db_dir, exist_ok=True)
     return os.path.join(db_dir, "inventory.db")
 
 DB_PATH = get_db_path()
@@ -41,7 +41,7 @@ def authenticate(username, password):
     conn.close()
 
     if user:
-        hashed_password = user[2]  # Already a byte object
+        hashed_password = user[2]
         if bcrypt.checkpw(password.encode(), hashed_password):
             return True
     return False
@@ -51,6 +51,14 @@ def add_product_to_db(name, quantity, price):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("INSERT INTO products (name, quantity, price) VALUES (?, ?, ?)", (name, quantity, price))
+    conn.commit()
+    conn.close()
+
+# Function to update a product in the database
+def update_product_in_db(product_id, name, quantity, price):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("UPDATE products SET name=?, quantity=?, price=? WHERE id=?", (name, quantity, price, product_id))
     conn.commit()
     conn.close()
 
@@ -67,8 +75,6 @@ def fetch_products():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("SELECT id, name, quantity, price FROM products")
-
-    # Ensure data types are correct and handle None values
     products = [
         (row[0], row[1], row[2] or 0, row[3] or 0.0)
         for row in cursor.fetchall()
@@ -135,6 +141,7 @@ class InventoryApp:
 
         # Buttons
         tk.Button(self.inventory_frame, text="Add Product", command=self.add_product_window).pack(pady=10)
+        tk.Button(self.inventory_frame, text="Edit Product", command=self.edit_product_window).pack(pady=10)
         tk.Button(self.inventory_frame, text="Delete Product", command=self.delete_product).pack(pady=10)
         tk.Button(self.inventory_frame, text="Low Stock Report", command=self.low_stock_report).pack(pady=10)
 
@@ -146,7 +153,7 @@ class InventoryApp:
             product_id = product[0]
             product_name = product[1]
             product_quantity = int(product[2])
-            product_price = f"{float(product[3]):.2f}"  # Ensure price is formatted correctly
+            product_price = f"{float(product[3]):.2f}"
             self.product_table.insert("", "end", values=(product_id, product_name, product_quantity, product_price))
 
     def add_product_window(self):
@@ -179,6 +186,48 @@ class InventoryApp:
             add_window.destroy()
 
         tk.Button(add_window, text="Save", command=save_product).grid(row=3, column=0, columnspan=2, pady=10)
+
+    def edit_product_window(self):
+        selected_item = self.product_table.selection()
+        if not selected_item:
+            messagebox.showerror("Error", "Please select a product to edit!")
+            return
+
+        product_values = self.product_table.item(selected_item)["values"]
+        product_id, current_name, current_quantity, current_price = product_values
+
+        edit_window = tk.Toplevel(self.root)
+        edit_window.title("Edit Product")
+
+        tk.Label(edit_window, text="Name:").grid(row=0, column=0, padx=10, pady=10)
+        name_entry = tk.Entry(edit_window)
+        name_entry.insert(0, current_name)
+        name_entry.grid(row=0, column=1)
+
+        tk.Label(edit_window, text="Quantity:").grid(row=1, column=0, padx=10, pady=10)
+        quantity_entry = tk.Entry(edit_window)
+        quantity_entry.insert(0, current_quantity)
+        quantity_entry.grid(row=1, column=1)
+
+        tk.Label(edit_window, text="Price:").grid(row=2, column=0, padx=10, pady=10)
+        price_entry = tk.Entry(edit_window)
+        price_entry.insert(0, current_price)
+        price_entry.grid(row=2, column=1)
+
+        def save_edits():
+            name = name_entry.get()
+            quantity = quantity_entry.get()
+            price = price_entry.get()
+
+            if not name or not quantity.isdigit() or not price.replace(".", "", 1).isdigit():
+                messagebox.showerror("Error", "Invalid input!")
+                return
+
+            update_product_in_db(product_id, name, int(quantity), float(price))
+            self.refresh_table()
+            edit_window.destroy()
+
+        tk.Button(edit_window, text="Save", command=save_edits).grid(row=3, column=0, columnspan=2, pady=10)
 
     def delete_product(self):
         selected_item = self.product_table.selection()
